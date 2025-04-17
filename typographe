@@ -1,0 +1,224 @@
+Sub Cleaner()
+    Dim doc As Document: Set doc = ActiveDocument
+    Dim fn As Footnote
+    Application.ScreenUpdating = False
+
+    ' 1) Nettoyage global du document
+    Call CleanTypoRange(doc.Content)
+
+    ' 2) Pour chaque note, on applique exactement les mêmes traitements
+    For Each fn In doc.Footnotes
+        Call CleanTypoRange(fn.Range)
+        ' en plus, on s'assure d'avoir un point final et le p. X insécable
+        With fn.Range.Find
+            .ClearFormatting: .Replacement.ClearFormatting
+            .MatchWildcards = False: .Wrap = wdFindContinue
+            ' point final
+            .Text = "[!.\r^l]@^13"    ' tout paragraphe sans point
+            .Replacement.Text = "^&."
+            .Execute Replace:=wdReplaceAll
+            ' p. X ? p.^sX
+            .Text = "p. "
+            .Replacement.Text = "p." & Chr(160)
+            .Execute Replace:=wdReplaceAll
+        End With
+    Next fn
+
+    Application.ScreenUpdating = True
+    MsgBox "Toilettage typographique PURH terminé !", vbInformation
+End Sub
+
+'--------------------------------------------
+' Routine qui applique TOUTES les règles à un Range donné
+Sub CleanTypoRange(rng As Range)
+    Dim ponct As Variant, i As Integer, toggle As Boolean
+    Dim fullRng As Range
+    
+    ' 0) Nettoyage de base
+    With rng.Find
+        .ClearFormatting: .Replacement.ClearFormatting
+        .Wrap = wdFindStop: .Forward = True
+
+        .Text = "^p^p": .Replacement.Text = "^p"
+        Do While .Execute(Replace:=wdReplaceAll): Loop
+
+        .Text = "  ": .Replacement.Text = " "
+        Do While .Execute(Replace:=wdReplaceAll): Loop
+
+        .Text = "^t": .Replacement.Text = ""
+        .Execute Replace:=wdReplaceAll
+    End With
+
+     ' — Étape 1 : guillemets anglais et droits ? chevrons français + insécables
+
+    ' 1a) Smart quotes anglais U+201C/U+201D
+    With rng.Find
+        .ClearFormatting
+        .MatchWildcards = False
+        .Wrap = wdFindContinue
+        .Text = ChrW(&H201C)      ' “
+        .Replacement.Text = "«" & Chr(160)
+        .Execute Replace:=wdReplaceAll
+
+        .Text = ChrW(&H201D)      ' ”
+        .Replacement.Text = Chr(160) & "»"
+        .Execute Replace:=wdReplaceAll
+    End With
+
+    ' 1b) Guillemets droits " ? chevrons alternés
+    toggle = True
+    With rng.Find
+        .ClearFormatting: .Replacement.ClearFormatting
+        .Text = Chr(34)           ' "
+        .Replacement.Text = ""
+        .MatchWildcards = False: .Wrap = wdFindStop
+    End With
+    Do While rng.Find.Execute
+        rng.Text = IIf(toggle, "«", "»")
+        toggle = Not toggle
+        rng.Collapse wdCollapseEnd
+    Loop
+
+    ' 1c) Correction des espaces autour des chevrons
+    With rng.Find
+        .ClearFormatting
+        .MatchWildcards = False
+        .Wrap = wdFindContinue
+
+        ' « + espace normal ? « + insécable
+        .Text = "« "
+        .Replacement.Text = "«" & Chr(160)
+        .Execute Replace:=wdReplaceAll
+
+        ' espace normal + » ? insécable + »
+        .Text = " »"
+        .Replacement.Text = Chr(160) & "»"
+        .Execute Replace:=wdReplaceAll
+    End With
+
+
+    ' 2) Apostrophes
+    With rng.Find
+        .ClearFormatting: .Wrap = wdFindStop
+        .Text = "'": .Replacement.Text = "’"
+        .MatchWildcards = False
+        .Execute Replace:=wdReplaceAll
+    End With
+
+    ' 3) Points de suspension
+    With rng.Find
+        .ClearFormatting: .Wrap = wdFindStop
+        .Text = "...": .Replacement.Text = "…"
+        .Execute Replace:=wdReplaceAll
+    End With
+
+    ' 4) Tirets cadratins
+    With rng.Find
+        .ClearFormatting: .Wrap = wdFindStop
+        .Text = "--": .Replacement.Text = "—"
+        .Execute Replace:=wdReplaceAll
+    End With
+
+    ' 5) Insécable avant ; : ! ?
+    ponct = Array(":", ";", "!", "?")
+    For i = LBound(ponct) To UBound(ponct)
+        With rng.Find
+            .ClearFormatting: .Wrap = wdFindStop
+            .Text = " " & ponct(i)
+            .Replacement.Text = Chr(160) & ponct(i)
+            .MatchWildcards = False
+            .Execute Replace:=wdReplaceAll
+        End With
+    Next i
+
+        ' — Étape 6 : ligatures œ / Œ et variantes (œuvre, vœu(x), sœur(s), œuf(s))
+    ' On repasse sur tout le document pour capturer tout ce qui reste
+    Set rng = rng.Document.Content
+    With rng.Find
+        .ClearFormatting: .Replacement.ClearFormatting
+        .MatchWildcards = False: .Wrap = wdFindContinue
+
+        ' œuvre(s)
+        .Text = "oeuvre":   .Replacement.Text = "œuvre":   .Execute Replace:=wdReplaceAll
+        .Text = "Oeuvre":   .Replacement.Text = "Œuvre":   .Execute Replace:=wdReplaceAll
+        .Text = "oeuvres":  .Replacement.Text = "œuvres":  .Execute Replace:=wdReplaceAll
+        .Text = "Oeuvres":  .Replacement.Text = "Œuvres":  .Execute Replace:=wdReplaceAll
+
+        ' vœu(x)
+        .Text = "voeu":     .Replacement.Text = "vœu":     .Execute Replace:=wdReplaceAll
+        .Text = "Voeu":     .Replacement.Text = "Vœu":     .Execute Replace:=wdReplaceAll
+        .Text = "voeux":    .Replacement.Text = "vœux":    .Execute Replace:=wdReplaceAll
+        .Text = "Voeux":    .Replacement.Text = "Vœux":    .Execute Replace:=wdReplaceAll
+
+        ' sœur(s)
+        .Text = "soeur":    .Replacement.Text = "sœur":    .Execute Replace:=wdReplaceAll
+        .Text = "Soeur":    .Replacement.Text = "Sœur":    .Execute Replace:=wdReplaceAll
+        .Text = "soeurs":   .Replacement.Text = "sœurs":   .Execute Replace:=wdReplaceAll
+        .Text = "Soeurs":   .Replacement.Text = "Sœurs":   .Execute Replace:=wdReplaceAll
+
+        ' œuf(s)
+        .Text = "oeuf":     .Replacement.Text = "œuf":     .Execute Replace:=wdReplaceAll
+        .Text = "Oeuf":     .Replacement.Text = "Œuf":     .Execute Replace:=wdReplaceAll
+        .Text = "oeufs":    .Replacement.Text = "œufs":    .Execute Replace:=wdReplaceAll
+        .Text = "Oeufs":    .Replacement.Text = "Œufs":    .Execute Replace:=wdReplaceAll
+    End With
+
+
+
+    Set fullRng = rng.Document.Content
+    ' — Étape 7a : siècles à trois lettres (XVI, XVII, XVIII, XIX, XXI…)
+    Set rng = fullRng
+    With rng.Find
+        .ClearFormatting
+        .MatchWildcards = True
+        .Text = "([XVI][XVI][XVI])(e)"
+        .Wrap = wdFindStop
+        .Forward = True
+        Do While .Execute
+            rng.Characters(1).Font.SmallCaps = True
+            rng.Characters(2).Font.SmallCaps = True
+            rng.Characters(3).Font.SmallCaps = True
+            rng.Characters(4).Font.Superscript = True
+            rng.Collapse wdCollapseEnd
+        Loop
+    End With
+
+    ' — Étape 7b : siècles à deux lettres (II, IV, VI, IX, XI, XX…)
+    Set rng = fullRng
+    With rng.Find
+        .ClearFormatting
+        .MatchWildcards = True
+        .Text = "([XVI][XVI])(e)"
+        .Wrap = wdFindStop
+        .Forward = True
+        Do While .Execute
+            rng.Characters(1).Font.SmallCaps = True
+            rng.Characters(2).Font.SmallCaps = True
+            rng.Characters(3).Font.Superscript = True
+            rng.Collapse wdCollapseEnd
+        Loop
+    End With
+
+    ' — Étape 7c : siècles à une lettre (I, V, X)
+    Set rng = fullRng
+    With rng.Find
+        .ClearFormatting
+        .MatchWildcards = True
+        .Text = "([XVI])(e)"
+        .Wrap = wdFindStop
+        .Forward = True
+        Do While .Execute
+            rng.Characters(1).Font.SmallCaps = True
+            rng.Characters(2).Font.Superscript = True
+            rng.Collapse wdCollapseEnd
+        Loop
+    End With
+
+
+    ' 8) Accent A début de phrase
+    With rng.Find
+        .ClearFormatting: .MatchWildcards = False: .Wrap = wdFindStop
+        .Text = ". A ": .Replacement.Text = ". À "
+        .Execute Replace:=wdReplaceAll
+    End With
+End Sub
