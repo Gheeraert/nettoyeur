@@ -1,0 +1,116 @@
+/**
+ * Ajoute un menu "PURH" à l'ouverture du document.
+ */
+function onOpen() {
+  DocumentApp.getUi()
+    .createMenu('PURH')
+    .addItem('Toiletter le document', 'purhCleaner')
+    .addToUi();
+}
+
+/**
+ * Point d'entrée : nettoie le corps, applique l'indentation,
+ * puis traite les notes de bas de page.
+ */
+function purhCleaner() {
+  var doc  = DocumentApp.getActiveDocument();
+  var body = doc.getBody();
+
+  // 1) Nettoyage et formattage
+  cleanTypoRange(body);
+
+  // 2) Indentation automatique (18 points) de tous les paragraphes
+  body.getParagraphs().forEach(function(par) {
+    par.setIndentFirstLine(18);
+  });
+
+  // 3) Notes de bas de page
+  doc.getFootnotes().forEach(function(fn) {
+    cleanTypoRange(fn.getFootnoteContents());
+    finalizeFootnote(fn);
+    // (facultatif) même indentation dans les notes :
+    fn.getFootnoteContents().getParagraphs().forEach(function(par) {
+      par.setIndentFirstLine(28);
+    });
+  });
+
+  DocumentApp.getUi().alert('Toilettage typographique PURH terminé !');
+}
+
+/**
+ * Applique les règles typographiques (guillemets, apostrophes, espaces, ligatures, siècles…) 
+ * à un container Text (Body ou FootnoteContents).
+ */
+function cleanTypoRange(container) {
+  // 0) Nettoyage de base
+  // container.replaceText('\\n{2,}', '\n'); // désactivé pour éviter l’erreur regex
+  container.replaceText(' {2,}', ' ');
+  // container.replaceText('\\t', '');      // désactivé également
+
+  // 1) Guillemets
+  container.replaceText('“', '«\u00A0');
+  container.replaceText('”', '\u00A0»');
+  container.replaceText('"([^"\\r\\n]+)"', '«\u00A0$1\u00A0»');
+
+  // 2) Apostrophes
+  container.replaceText("'", '’');
+
+  // 3) Points de suspension
+  container.replaceText('\\.\\.\\.', '…');
+
+  // 4) Tirets cadratins
+  container.replaceText('--', '—');
+
+  // 5) Espace insécable avant ; : ! ?
+  container.replaceText(' ([;:!?])', '\u00A0$1');
+
+  // 6) Ligatures œ, vœu(x), sœur(s), œuf(s)
+  var ligatures = [
+    ['oeuvre','œuvre'], ['Oeuvre','Œuvre'],
+    ['oeuvres','œuvres'], ['Oeuvres','Œuvres'],
+    ['voeu','vœu'],     ['Voeu','Vœu'],
+    ['voeux','vœux'],   ['Voeux','Vœux'],
+    ['soeur','sœur'],   ['Soeur','Sœur'],
+    ['soeurs','sœurs'], ['Soeurs','Sœurs'],
+    ['oeuf','œuf'],     ['Oeuf','Œuf'],
+    ['oeufs','œufs'],   ['Oeufs','Œufs']
+  ];
+  ligatures.forEach(function(pair) {
+    container.replaceText('\\b' + pair[0] + '\\b', pair[1]);
+  });
+
+  // 7) Siècles Iᵉ → XXIᵉ : majuscules + exposant sur le "e"
+  var seqRe = '\\b(I|II|III|IV|V|VI|VII|VIII|IX|X|XI|XII|XIII|XIV|XV|XVI|XVII|XVIII|XIX|XX|XXI)(e)\\b';
+  var found = container.findText(seqRe);
+  while (found) {
+    var el    = found.getElement().asText();
+    var start = found.getStartOffset();
+    var end   = found.getEndOffsetInclusive();
+    var text  = el.getText().substring(start, end + 1);
+    var upper = text.toUpperCase();
+    // Remplace le texte par sa version en majuscules
+    el.deleteText(start, end);
+    el.insertText(start, upper);
+    // Mettre le 'e' en exposant
+    el.setTextStyle(
+      start + upper.length - 1,
+      start + upper.length - 1,
+      DocumentApp.newTextStyle().setSuperscript(true).build()
+    );
+    found = container.findText(seqRe, found);
+  }
+}
+
+/**
+ * Finalise une note de bas de page :
+ * - ajoute un point final si manquant
+ * - remplace "p. X" par "p. X" (espace insécable)
+ */
+function finalizeFootnote(fn) {
+  var contents = fn.getFootnoteContents();
+  var txt      = contents.getText();
+  if (txt.trim().slice(-1) !== '.') {
+    contents.appendParagraph('.').setBold(false);
+  }
+  contents.replaceText('\\bp\\. (\\d+)', 'p.\u00A0$1');
+}
