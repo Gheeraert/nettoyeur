@@ -1,6 +1,6 @@
 # PURH TypoCleaner
 
-Un module VBA pour Microsoft Word conçu pour les **Presses universitaires de Rouen et du Havre (PURH)**.  
+Un outil sous deux formats pour les **Presses universitaires de Rouen et du Havre (PURH)** : une macro Word et un script Google Doc
 Il automatise le toilettage typographique : guillemets, apostrophes, ligatures, ponctuation, siècles en petites capitales, notes de bas de page…
 
 ---
@@ -22,8 +22,14 @@ Il automatise le toilettage typographique : guillemets, apostrophes, ligatures,
 
 ---
 
-## 🚀 Installation
+## 🚀 Installation sous Word
 
 1. Ouvrez Word et appuyez sur **Alt + F11** pour ouvrir l’éditeur VBA.  
 2. Dans le projet **Normal** (ou votre modèle `.dotm`), `Insertion > Module`.  
 3. Copiez‑collez les deux routines du modèle.
+
+## 🚀 Installation sous Google Docs
+1. Ouvrez le Menu Extensions, cliquez sur App Script.
+2. Collez le code et exécutez-le.
+3. Le menu PURH apparaît sur le ruban du document.
+
